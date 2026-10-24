@@ -1,0 +1,11 @@
+node_modules/
+*.tgz
+*.log
+
+# Credentials — never commit these
+.env
+.env.*
+*.pem
+*.key
+credentials*
+*secret*

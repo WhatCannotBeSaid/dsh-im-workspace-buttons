@@ -1,0 +1,18 @@
+# dsh-im-workspace-buttons bundle patch
+#
+# One row, and only one. It is the `dsh.client` browser-roster entry as much as the mount
+# line: the web modules half scans the mounted rows for a package that declares
+# `exports["./client"]` and loads client.js into the page.
+#
+# The control is entirely client-side. The host half (index.js) exists only so the loader
+# has something to mount; it registers no service, opens no route, injects nothing and
+# exports no Config, because this plugin has no preference to store -- the one durable fact
+# it depends on (which channels hold an account) belongs to @xmanrui/dsh-im and is read
+# from that plugin's own status route, never cached here.
+#
+# Nothing official is reconfigured, reordered or disabled: the buttons are inserted into a
+# row the host already renders, and everything they touch is an official slot, an official
+# service, or this plugin's own data attributes.
+- insert:
+    - id: dsh-im-workspace-buttons
+      name: 'dsh-im-workspace-buttons'

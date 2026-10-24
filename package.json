@@ -1,0 +1,58 @@
+{
+  "name": "dsh-im-workspace-buttons",
+  "version": "1.0.0",
+  "description": "工作区旁按钮 — one 28x28 channel entry per @xmanrui/dsh-im channel that holds an account, in the official 工作区 header row; pressing one filters the session list to that channel. Extracted from eva-inspired-theme so the control installs without the skin.",
+  "type": "module",
+  "license": "MIT",
+  "author": "WhatCannotBeSaid",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhatCannotBeSaid/dsh-im-workspace-buttons.git"
+  },
+  "homepage": "https://github.com/WhatCannotBeSaid/dsh-im-workspace-buttons#readme",
+  "bugs": {
+    "url": "https://github.com/WhatCannotBeSaid/dsh-im-workspace-buttons/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "src/runtime.js",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-api-remotes"
+      ]
+    }
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "workspace",
+    "dsh-im",
+    "channel-filter"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

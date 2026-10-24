@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Workspace Channel Buttons",
+    "description": "One 28×28 icon button per @xmanrui/dsh-im channel that holds an account, in the official 工作区 header row. Press one to show only that channel's conversations; press it again to return to the official list."
+  }
+}
