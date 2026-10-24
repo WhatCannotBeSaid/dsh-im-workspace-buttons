@@ -3,6 +3,18 @@
 All notable changes are recorded here. Versions follow SemVer; a new feature raises
 the minor version, a pure fix raises the patch version.
 
+## 1.0.1 — 2026-10-25
+
+### Changed
+
+- **Bilingual README.** `README.md` is now the English edition and `README.zh.md` the
+  Chinese one, with a language switch at the top of each, matching the convention
+  `eva-inspired-theme` already uses. Both are published in the tarball; npm renders
+  `README.md`, so the English edition is the one shown on the package page.
+
+No code change: `client.js`, `src/runtime.js`, the locale files and the patch are
+byte-identical to 1.0.0 (`build-client --check` in sync, 14/14 tests).
+
 ## 1.0.0 — 2026-10-25
 
 First standalone release. The feature is extracted verbatim from

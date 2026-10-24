@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-workspace-buttons",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "工作区旁按钮 — one 28x28 channel entry per @xmanrui/dsh-im channel that holds an account, in the official 工作区 header row; pressing one filters the session list to that channel. Extracted from eva-inspired-theme so the control installs without the skin.",
   "type": "module",
   "license": "MIT",
@@ -26,6 +26,7 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
+    "README.zh.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
