@@ -27,10 +27,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # 不给 setup-node 传 registry-url：它会往 .npmrc 写一行
+      #   //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+      # 并塞一个占位令牌（XXXXX-XXXXX-…）。npm 会拿这个令牌去认证，
+      # OIDC 就走不到了，PUT 直接 404。默认 registry 本来就是 npmjs.org。
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: 校验 tag 与 package.json 版本一致
         run: |
