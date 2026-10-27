@@ -31,6 +31,11 @@ window.__ModuleLoader__.load({
       var BUTTON_ATTR = 'data-eva-im-button'
       var STATE_ATTR = 'data-eva-im-state'
       var ROW_ATTR = 'data-eva-im-row'
+      /* Round 66: the row tag is not ROW_ATTR. That attribute is on the host's watch list for
+         this effect's own passes (round 40 watches data-eva-im*), and a row is tagged far more
+         often than a container is -- so the tags moved to their own attribute to keep the
+         observer's re-entrancy story one writer per attribute. */
+      var TAG_ATTR = 'data-eva-im-tag'
       var TREE_ATTR = 'data-eva-im-tree'
       var SHEET_ATTR = 'data-dsh-im-workspace-buttons-sheet'
       var SESSION_PREFIX = 'session:'
@@ -43,6 +48,10 @@ window.__ModuleLoader__.load({
       var CHANNEL_ATTR = 'data-dsh-im-session-channel'
       /* The host's own names for the 工作区 area and for the empty marker that is a direct
          child of that row -- both are slots, not CSS-Modules classes. */
+      /* The Ungrouped bucket's own rows. The empty group key is where the host files every
+         session no workspace record claims (ui-workspace :1043-1044), so its show-more control
+         is keyed `overflow:` with nothing after the colon and has no header row to press. */
+      var UNGROUPED_SESSION = '__ungrouped_session__'
       var SLOT_SELECTOR = "[data-slot='sidebar.workspaces']"
       var MARK_SELECTOR = "[data-slot='sidebar.workspaces.directoryFlow']"
       /* 46 official clicks take a group of 231 rows to fully expanded. The limit stops a
@@ -62,10 +71,20 @@ window.__ModuleLoader__.load({
          this sheet and the host's sheet are siblings in cascade order and winning by order is
          not a contract. The middle part is not optional: only it pulls untagged rows into
          scope. An earlier build wrote the negation as
-         `[data-eva-im-row]:not([data-eva-im-row='on'])`, which matches only rows that CARRY the
+         `[data-eva-im-tag]:not([data-eva-im-tag='on'])`, which matches only rows that CARRY the
          tag with a value other than on -- and because the off state writes no tag at all, it
          hid nothing. The lesson: a selector must not require an attribute that the behaviour
-         expresses by NOT writing it.
+         expresses by NOT writing it. Round 66 writes `off` explicitly, so the tag is now one
+         attribute with three states and `display: none` is its only rule.
+
+         Round 66: the container attribute now carries the channel's name in every view and 'none'
+         when nothing is lit, because the grouped views must hide dsh-im's own rows when no view is
+         lit -- every other row shows, and every row surface() accepted as dsh-im is `off` and stays
+         hidden. The flat list draws its rows OUTSIDE that tree, so the flat page is named too: the
+         attribute its own renderer already puts on the list container is a contract of ui-workspace
+         (:3896-4029), which is what makes a row there reachable without education about a class
+         hash. `off` is written explicitly rather than by omission, which is what lets one selector
+         hide a row in all three shapes.
 
          Injection is paint's job rather than mount's, so a document that is not ready yet still
          gets the sheet on the first pass that draws something. */
@@ -94,7 +113,7 @@ window.__ModuleLoader__.load({
         '  color: var(--dsw-alias-brand-primary);',
         '}',
         '',
-        "[data-eva-im-tree] [data-row-key]:not([data-eva-im-row='on']) {",
+        "[data-eva-im-tag='off'] {",
         '  display: none;',
         '}',
         '',
@@ -262,10 +281,6 @@ window.__ModuleLoader__.load({
       var scroll = null
       var scheduled = false
       var disposed = false
-      /* Whether any row still carries the tag this effect writes. It goes true on the
-         first lit pass and stays true, so a pass with no view lit costs no property reads
-         once those writes are gone. */
-      var marked = false
       /* Round 50, per channel since round 57: whether a channel holds an account. A key
          that is not there yet means nothing has answered, and round 64 made that ONE answer
          for every channel instead of a per-channel default: no account, no button -- the
@@ -302,16 +317,23 @@ window.__ModuleLoader__.load({
         return slotHost
       }
 
-      /* The session tree. The host renders exactly one role=tree, inside the workspaces
-         slot, and every row -- group headers included -- lives in it, so one walk of the
-         tree sees both the group a Session sits under and the Session itself. */
+      /* The container that draws the conversation rows. In the two grouped views that is the
+         session tree: the host renders exactly one role=tree, inside the workspaces slot, and
+         every row -- group headers included -- lives in it, so one walk sees both the group a
+         Session sits under and the Session itself.
+
+         Round 66: the single list is not a tree. The same walk has to reach its rows -- they are
+         outside [role=tree] -- and the kind of page on screen decides whether the sheet marks the
+         tree, the flat container, or both. A grouped render is a tree with rows of its own, so it
+         is not mistaken for a flat page that merely happens to draw an empty one. */
       function tree() {
         var slot = slotNode()
-        if (slot === null) return null
-        var host = slot.querySelector("[role='tree']")
-        if (host === null) return null
-        if (host.querySelector('[data-row-key]') === null) return null
-        return host
+        var host = slot === null ? null : slot.querySelector("[role='tree']")
+        var flat = flatList()
+        if (host !== null && host.querySelector('[data-row-key]') !== null) return host
+        if (flat !== null && flat.getAttribute(TREE_ATTR) !== null) return flat
+        if (flat !== null && flat.querySelector('[data-row-key]') !== null) return flat
+        return null
       }
 
       function keyOf(node) {
@@ -327,17 +349,90 @@ window.__ModuleLoader__.load({
          the 微信 view; both language labels of a channel are tested, because the plugin
          titles the same Session 'WeChat · ...' in an English profile. */
       function isChannel(row, channel) {
+        return holds(row, channel.id, channel.leads, true)
+      }
+
+      /* Round 66: which dsh-im surface a row is, as one question. The channel id is what the
+         official cell carries; the title lead is what a profile without that marker still has.
+         surface() answers it for all channels at once -- a row is only ever one surface, but a
+         tag has to reach every one of them the same way.
+
+         The row's own name is the title minus the lead. That is what a grouped list draws
+         (:1027-1046 hides everything before the dot), and it is what keeps a Session called
+         'WeChat · 会议' under the header 微信 · 项目 apart from a dsh-im one, whose own name
+         has no lead in it any more. Haiku rows carry neither cell nor lead and fall out. */
+      function holds(row, id, leads, own) {
         var cell = row.children.length > 1 ? row.children[1] : null
         if (cell === null) return false
-        if (cell.getAttribute(CHANNEL_ATTR) === channel.id) return true
-        if (row.getAttribute(CHANNEL_ATTR) === channel.id) return true
+        if (cell.getAttribute(CHANNEL_ATTR) === id) return true
+        if (row.getAttribute(CHANNEL_ATTR) === id) return true
         var text = cell.textContent
         var whole = row.textContent
         var lead
-        for (var i = 0; i < channel.leads.length; i++) {
-          lead = channel.leads[i]
-          if (typeof text === 'string' && text.replace(/^[ \t\r\n]+/, '').indexOf(lead) === 0) return true
+        var bare = typeof text === 'string' ? text.replace(/^[ \t\r\n]+/, '') : null
+        for (var i = 0; i < leads.length; i++) {
+          lead = leads[i]
+          if (bare !== null && bare.indexOf(lead) === 0) {
+            if (own !== true || leadLed(bare.slice(lead.length)) === false) return true
+          }
           if (typeof whole === 'string' && whole.indexOf(lead) === 0) return true
+        }
+        return false
+      }
+
+      /* Whether a title starts with one of the labels a plugin puts in front of a Session --
+         every channel's, not just one, because the host owes a dsh-im Session its channel and
+         not the other way round. */
+      function leadLed(text) {
+        var channel
+        var i
+        var j
+        for (i = 0; i < CHANNELS.length; i++) {
+          channel = CHANNELS[i]
+          for (j = 0; j < channel.leads.length; j++) {
+            if (text.indexOf(channel.leads[j]) === 0) return true
+          }
+        }
+        return false
+      }
+
+      /* Round 66: the channel a row belongs to, or false for a row that is not a dsh-im
+         conversation at all. `lit` is the channel whose view is on screen, or null, and decides
+         one thing only: a row that carries the dsh-im cell but no lead in what it shows (a
+         grouped list draws the Session alone, which is the very case this round is about) counts
+         as the lit channel's, because that is the only channel view its row can be reached
+         from; with nothing lit it counts for no one. Rows titled with a lead -- which is what the
+         flat list and the ungrouped bucket show -- answer by themselves.
+
+         The marker settles a row when it names a channel this table knows. Without one, the
+         lead test runs on the row's own name -- the title minus the lead -- when the host is
+         drawing it under a group (the group is prefixed on screen, so the drawn title would
+         otherwise pass for the channel), and on what it shows when it is under no group. */
+      function surface(row, header, lit) {
+        var cell = row.children.length > 1 ? row.children[1] : null
+        var stamped = cell === null ? null : cell.getAttribute(CHANNEL_ATTR)
+        if (stamped === null || stamped === '') stamped = row.getAttribute(CHANNEL_ATTR)
+        var i
+        var j
+        for (i = 0; i < CHANNELS.length; i++) {
+          if (stamped === CHANNELS[i].id) return CHANNELS[i].id
+        }
+        if (stamped !== null && stamped !== '') {
+          if (lit !== null && lit !== undefined && holds(row, lit.id, lit.leads, false)) return lit.id
+          return false
+        }
+        var grouped = header !== null && header !== undefined
+        var bare = cell !== null && typeof cell.textContent === 'string' ? cell.textContent.replace(/^[ \t\r\n]+/, '') : ''
+        for (i = 0; i < CHANNELS.length; i++) {
+          var channel = CHANNELS[i]
+          if (holds(row, channel.id, channel.leads, grouped) === false) continue
+          /* A grouped row whose own name starts with another lead is a different channel's, or
+             an official session wearing one: the lit view may still have it, nothing else does. */
+          if (grouped && bare !== '' && leadLed(bare) && lit !== null && lit !== undefined && stamped === null) {
+            if (holds(row, lit.id, lit.leads, false)) return lit.id
+            continue
+          }
+          return channel.id
         }
         return false
       }
@@ -347,56 +442,128 @@ window.__ModuleLoader__.load({
         return mode === 0 ? null : CHANNELS[mode - 1]
       }
 
-      /* Every row of the tree, tagged against what is on screen -- and only while a view is
-         lit. The tag names the rows that stay: a Session of the selected channel, which is
-         the whole of what the sheet's rule lets through; every other row -- group headers and
-         the overflow controls alike -- is untagged and therefore hidden. The Ungrouped header
-         goes with them: the user asked for the 未分组 header itself to disappear in filter
-         mode, leaving the conversations alone, without touching how its Sessions show or
-         switch (m00881). With no view lit no row carries a tag at all, so that pass costs a
-         read of one flag and leaves the host's own list attribute for attribute. Only a
-         changed value is ever written, which is what lets an observer-driven pass stay silent
-         (round 40). */
+      /* Every row on screen, tagged with what the sheet should do with it, in two states of the
+         same page:
+           the official list (no entry lit)
+             'off'  a dsh-im conversation, of any channel -- hidden by the sheet, so the list the
+                    host draws holds official conversations only;
+             none   the host's own conversation, and every group header and show-more control --
+                    drawn exactly as the host drew it.
+           a lit view (one entry pressed)
+             'on'   a conversation of the lit channel -- the only thing the view is about;
+             'off'  everything else: every other channel's conversation, every official one, and
+                    the group headers and show-more controls above them. The view is the channel's
+                    conversations and nothing else, which is what an entry promises.
+         So a dsh-im conversation never shows in the official list -- it shows only inside its own
+         channel's view, and that view shows nothing else. These rows are the host's, not the page's;
+         put back the moment the view closes. Only a changed value is ever written, which is what
+         lets an observer-driven pass stay silent (round 40).
+
+         The walk asks surface() -- not the key prefix -- what a row is, so a group header can
+         never pass for a conversation. The header a Session sits under is remembered as the walk
+         goes: the first row keyed without the session prefix. */
       function mark(host) {
         var channel = selected()
         var i
         var row
         var key
+        var channelOf
         var rows
-        var seen = false
-        if (channel === null) {
-          if (!marked) return
-          rows = host.querySelectorAll('[' + ROW_ATTR + ']')
-          for (i = 0; i < rows.length; i++) rows[i].removeAttribute(ROW_ATTR)
-          marked = false
-          return
-        }
+        var header = null
+        if (host === null || host === undefined || typeof host.querySelectorAll !== 'function') return
         rows = host.querySelectorAll('[data-row-key]')
         for (i = 0; i < rows.length; i++) {
           row = rows[i]
           key = keyOf(row)
           if (key === null) continue
-          if (key.indexOf(SESSION_PREFIX) === 0 && isChannel(row, channel)) {
-            seen = true
-            if (row.getAttribute(ROW_ATTR) !== 'on') row.setAttribute(ROW_ATTR, 'on')
-          } else if (row.getAttribute(ROW_ATTR) !== null) {
-            row.removeAttribute(ROW_ATTR)
+          if (key.indexOf(SESSION_PREFIX) !== 0) {
+            header = row
+            /* A group header is not a conversation. The official list keeps it; a lit view has no
+               group to name, because everything under it except the channel's own rows is gone. */
+            if (channel === null) {
+              if (row.getAttribute(TAG_ATTR) !== null) row.removeAttribute(TAG_ATTR)
+            } else if (row.getAttribute(TAG_ATTR) !== 'off') {
+              row.setAttribute(TAG_ATTR, 'off')
+            }
+            continue
+          }
+          channelOf = surface(row, header, channel)
+          if (channel !== null) {
+            /* The lit view: the channel's own conversations, and only those. */
+            if (channelOf === channel.id) {
+              if (row.getAttribute(TAG_ATTR) !== 'on') row.setAttribute(TAG_ATTR, 'on')
+            } else if (row.getAttribute(TAG_ATTR) !== 'off') {
+              row.setAttribute(TAG_ATTR, 'off')
+            }
+          } else if (channelOf === false) {
+            /* The host's own conversation, in the host's own list: never tagged. */
+            if (row.getAttribute(TAG_ATTR) !== null) row.removeAttribute(TAG_ATTR)
+          } else if (row.getAttribute(TAG_ATTR) !== 'off') {
+            row.setAttribute(TAG_ATTR, 'off')
           }
         }
-        if (seen) marked = true
       }
 
-      /* The one attribute the sheet filters on: present while a view is lit, and its value
-         is the channel that view is about. Absent means the list is the host's own, which is
-         also the whole of the undo. */
+      /* The flat list's own container: rows are drawn inside it, outside the tree.
+         ui-workspace names it on every flat render (:3896-4029), which is the contract this
+         reaches for -- a class hash would not be one. */
+      function flatList() {
+        var slot = slotNode()
+        var base = slot === null ? document : slot
+        var node = base.querySelector('[data-testid="session-list"]')
+        if (node === null && base !== document) node = document.querySelector('[data-testid="session-list"]')
+        return node
+      }
+
+      /* The one attribute the sheet reads, on whichever container draws the rows: present while a
+         view is lit and carrying its channel, 'none' while a grouped page has no view lit.
+         imView() answers whether the page is grouped, which decides which containers carry it.
+
+         Round 66 writes the values the sheet needs, and it writes them on every shape of page. A
+         grouped list carries 'none' while nothing is lit and the channel's id once its entry is
+         pressed: the sheet reads both, so no dsh-im conversation shows in 工作区 or 工作区树 until
+         then. A flat list carries the channel's id while a view is lit and nothing at all
+         otherwise, because with nothing lit the single list must come back to the host exactly as
+         the host drew it -- no attribute, no tag.
+
+         Returns whether every row on screen is inside [role=tree]: false in the flat list, which
+         openStep() needs, because a flat page's own first-page control is not the Ungrouped
+         bucket's. A document this cannot read is answered true -- grouped -- so the bucket is
+         never mistaken for a flat page. */
       function imView(host) {
+        var node = flatList()
+        if (host === null || host === undefined) host = tree()
+        var grouped = host === null || host !== node
         mark(host)
-        var channel = selected()
-        if (channel !== null) {
-          if (host.getAttribute(TREE_ATTR) !== channel.id) host.setAttribute(TREE_ATTR, channel.id)
-        } else if (host.getAttribute(TREE_ATTR) !== null) {
-          host.removeAttribute(TREE_ATTR)
+        if (node !== null && node !== host) {
+          /* Reach the rows the tree does not draw -- but never hand the flat container a verdict
+             taken while its rows were out of sight. */
+          if (!grouped || host === null) mark(node)
         }
+        var channel = selected()
+        /* Round 66: the single list carries no marker at all while nothing is lit. It belongs to
+           the page, its rows carry no tag then, and an attribute left behind would be a change the
+           host never asked for. A grouped container is always marked -- 'none' included -- because
+           its rows are tagged on every view and the sheet needs the scope. */
+        if (host !== null && typeof host.setAttribute === 'function') {
+          if (channel === null && grouped === false) {
+            if (host.getAttribute(TREE_ATTR) !== null) host.removeAttribute(TREE_ATTR)
+          } else {
+            var wanted = channel === null ? 'none' : channel.id
+            if (host.getAttribute(TREE_ATTR) !== wanted) host.setAttribute(TREE_ATTR, wanted)
+          }
+        }
+        if (node !== null && node !== host) {
+          if (grouped) {
+            /* A grouped page for the tree: the flat container goes back to what the host drew. */
+            if (node.getAttribute(TREE_ATTR) !== null) node.removeAttribute(TREE_ATTR)
+          } else if (channel !== null) {
+            if (node.getAttribute(TREE_ATTR) !== channel.id) node.setAttribute(TREE_ATTR, channel.id)
+          } else if (node.getAttribute(TREE_ATTR) !== null) {
+            node.removeAttribute(TREE_ATTR)
+          }
+        }
+        return grouped
       }
 
       /* A button carries the channel it selects in its value, and is on exactly when that
@@ -610,11 +777,12 @@ window.__ModuleLoader__.load({
 
       /* The groups that hold a conversation of the selected channel, read from the two
          snapshots the vendored rail already reads instead of guessed from whatever happens
-         to be rendered. The host's own model groups a Session by its cwd -- ui-workspace:
-         'summary.cwd === workspace.path', plus a workspaceBySession map built from
-         workspace.sessionIds -- and its key for the Ungrouped bucket is the empty
-         suffix. This is what makes the entry work cold: a folded group renders no rows
-         at all, so nothing on screen says which group the conversations are in. */
+         to be rendered. The host's own model groups a Session by its workspace record --
+         ui-workspace claims every id in a record's sessionIds, and everything left over is
+         Ungrouped (:1027-1046); a cwd takes no part in it -- and its key for the Ungrouped
+         bucket is the empty suffix. This is what makes the entry work cold: a folded group
+         renders no rows at all, so nothing on screen says which group the conversations are
+         in. */
       function candidates() {
         var out = []
         var channel = selected()
@@ -632,7 +800,6 @@ window.__ModuleLoader__.load({
           } catch (error) { items = [] }
         }
         var owner = {}
-        var path = {}
         var i
         var j
         for (i = 0; i < items.length; i++) {
@@ -640,7 +807,6 @@ window.__ModuleLoader__.load({
           if (item === null || typeof item !== 'object') continue
           var id = item.workspaceId
           if (typeof id !== 'string') continue
-          if (typeof item.path === 'string') path[item.path] = id
           var ids = item.sessionIds
           if (ids === undefined || ids === null) continue
           for (j = 0; j < ids.length; j++) owner[ids[j]] = id
@@ -650,12 +816,32 @@ window.__ModuleLoader__.load({
           if (session === null || typeof session !== 'object') continue
           var title = session.title
           if (typeof title !== 'string' || !startsWith(title, channel.leads)) continue
-          var group = owner[key]
-          if (group === undefined && typeof session.cwd === 'string') group = path[session.cwd]
-          if (group === undefined) group = ''
+          var group = home(key, owner)
           if (out.indexOf(group) === -1) out.push(group)
         }
         return out
+      }
+
+      /* Round 66: the one answer to "which group does this session live in", and it is the answer
+         the host itself renders, asked in the host's own order rather than rebuilt:
+
+           ui-workspace's groupByWorkspace (:1027-1046) walks the workspace records in order and
+           claims every id in a record's sessionIds; whatever is left of the list becomes the
+           Ungrouped bucket (:1043-1044). A cwd plays no part there, and that file's own
+           workspaceBySession helper (:1177) is a search LABEL built from the same lists -- never
+           the grouping rule.
+
+         Round 65 asked three sources, map -> sessionIds -> normalised cwd, and the third was
+         wrong in kind and not merely imprecise: a session no record names -- one dsh-im opened
+         by itself, in a workspace it was never moved into -- was pulled into whichever workspace
+         owned its cwd, which the host does not do. The group opened for that channel was then
+         one its row never appears in, or one the host keeps folded, and folded was where it
+         stayed. Two copies of one rule had drifted; keep one.
+
+         candidates() and rendered() both ask it, so the groups opened for a channel and the rows
+         it shows can never disagree. '' is the host's key for Ungrouped. */
+      function home(key, owner) {
+        return owner[key] === undefined ? '' : owner[key]
       }
 
       /* One title, two labels: the plugin parses either of a channel's labels, so the
@@ -680,11 +866,17 @@ window.__ModuleLoader__.load({
           var key = keyOf(rows[i])
           if (key === null) continue
           if (key.indexOf(WORKSPACE_PREFIX) === 0) group = key.slice(WORKSPACE_PREFIX.length)
-          else if (key.indexOf(SESSION_PREFIX) === 0 && group !== null && isChannel(rows[i], channel)) {
+          else if (key.indexOf(SESSION_PREFIX) === 0 && group !== null && surface(rows[i], null, channel) === channel.id) {
             if (out.indexOf(group) === -1) out.push(group)
           }
         }
         return out
+      }
+
+      /* Show-more control of one group, or null. In a flat list the page's own control is
+         the one keyed `overflow:` with nothing after the colon. */
+      function showMore(key) {
+        return document.querySelector('[data-row-key="' + OVERFLOW_PREFIX + key + '"]')
       }
 
       /* One official click per frame, in two stages. First the groups themselves: a group
@@ -693,13 +885,24 @@ window.__ModuleLoader__.load({
          header -- the click a user makes -- and only for the groups the model above names,
          so no other workspace is touched. Then its show-more control, until the control
          reports the group fully expanded: aria-expanded true is the state its own single
-         click collapses from, which is what makes the way out one click per group. */
+         click collapses from, which is what makes the way out one click per group.
+
+         Round 66: two groups bucketed under '' need telling apart. In the two grouped views
+         '' is the Ungrouped group, which has no header row to press -- only its show-more
+         control -- while in a flat list it is the FIRST page's own control. Not telling the
+         two apart left the flat list showing five rows with every other dsh-im conversation
+         hidden behind an unexpanded control, and left a control opened under that empty key
+         unable to close again. So the flat page is remembered under a name no workspace can
+         hold, and only its single control is asked for: a flat list nests nothing, so it has
+         no group headers to unfold. */
       function openStep(host) {
         var keys = candidates()
         if (keys.length === 0) keys = rendered(host)
+        var flat = imView(tree()) === false
         var key
         var i
-        for (i = 0; i < keys.length; i++) {
+        var n = flat ? 0 : keys.length
+        for (i = 0; i < n; i++) {
           key = keys[i]
           if (unfolded[key] === true) continue
           var header = document.querySelector('[data-row-key="' + WORKSPACE_PREFIX + key + '"]')
@@ -710,11 +913,11 @@ window.__ModuleLoader__.load({
           return true
         }
         for (i = 0; i < keys.length; i++) {
-          key = keys[i]
-          var control = document.querySelector('[data-row-key="' + OVERFLOW_PREFIX + key + '"]')
+          key = flat ? UNGROUPED_SESSION : keys[i]
+          var control = showMore(key)
           if (control === null) continue
           if (control.getAttribute('aria-expanded') === 'true') continue
-          opened[key] = true
+          opened[key] = key
           control.click()
           return true
         }
@@ -732,7 +935,7 @@ window.__ModuleLoader__.load({
         var i
         for (i = 0; i < keys.length; i++) {
           key = keys[i]
-          var control = document.querySelector('[data-row-key="' + OVERFLOW_PREFIX + key + '"]')
+          var control = showMore(key === UNGROUPED_SESSION ? '' : key)
           if (control !== null && control.getAttribute('aria-expanded') === 'true') {
             control.click()
             return true
@@ -850,11 +1053,24 @@ window.__ModuleLoader__.load({
           window.removeEventListener('focus', refreshStatus)
         }
         var host = tree()
-        if (host !== null) {
-          if (host.getAttribute(TREE_ATTR) !== null) host.removeAttribute(TREE_ATTR)
-          var tagged = host.querySelectorAll('[' + ROW_ATTR + ']')
-          for (var t = 0; t < tagged.length; t++) tagged[t].removeAttribute(ROW_ATTR)
-        }
+        /* Round 66: the visual state goes back to the official list BEFORE anything is taken off,
+           and only a container still carrying this effect's own marker is touched: 'none' or a
+           channel id it wrote. A flat page found with nothing lit carries no marker at all, and
+           must come out of the visit as it went in. */
+        mode = 0
+        clicks = 0
+        if (frame !== 0) cancelAnimationFrame(frame)
+        frame = 0
+        scroll = null
+        action = 0
+        imView(host)
+        if (host !== null && host.getAttribute(TREE_ATTR) === 'none') host.removeAttribute(TREE_ATTR)
+        var flat = flatList()
+        if (flat !== null && flat !== host && flat.getAttribute(TREE_ATTR) !== null) flat.removeAttribute(TREE_ATTR)
+        /* Round 66: tags can sit on rows a flat page drew outside the tree, so the undo asks
+           the document, not the tree. */
+        var tagged = document.querySelectorAll('[' + TAG_ATTR + ']')
+        for (var t = 0; t < tagged.length; t++) tagged[t].removeAttribute(TAG_ATTR)
         var buttons = document.querySelectorAll('[' + BUTTON_ATTR + ']')
         for (var k = 0; k < buttons.length; k++) {
           var button = buttons[k]

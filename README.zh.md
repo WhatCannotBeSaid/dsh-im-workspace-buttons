@@ -5,7 +5,8 @@
 [English](README.md) | 中文
 
 在官方「工作区」表头行里，每个已接入的 [@xmanrui/dsh-im](https://www.npmjs.com/package/@xmanrui/dsh-im)
-渠道放一枚 28×28 图标按钮。点一枚只说该渠道的会话；再点一次回到官方列表。
+渠道放一枚 28×28 图标按钮。点一枚即进入该渠道的视图：只画该渠道的会话，官方列表（其余所有会话、所有分组表头）
+全部退到后面；再点同一枚回到官方列表，dsh-im 的会话重新隐藏。
 
 本包是从 `eva-inspired-theme` 里剥出来的单功能插件：只保留这组按钮，不带来皮肤、不做主题替换，
 不依赖主题的 CSS、locale 命名空间或构建流程。
@@ -41,10 +42,14 @@ npm install dsh-im-workspace-buttons --prefix ~/.dsh/profiles/desktop --registry
 | 插件 id | `dsh-im-workspace-buttons`（client 模块 id、locale 命名空间同名） |
 | 出现在哪 | 官方 `sidebar.workspaces.directoryFlow` 标记所在的表头行，搜索槽左侧，按渠道表顺序 |
 | 显示条件 | 对应渠道**已接入**才显示：`connection.status` 返回 `bots[]` 里有非空 `botId`，或旧版返回的 `configured: true`；探测不出结论（RPC 未就绪、请求失败）时首轮不画、之后保留上次结论 |
-| 点击 | 只显示该渠道的会话行（按 `data-dsh-im-session-channel` 或行文本前缀认出）；再点一次回到官方列表 |
-| 折叠分组 | 只有点击时才展开、翻页、滚动到该渠道的首个会话，且以 `CLICK_LIMIT = 200` 步为上限 |
+| 点击 | 进入该渠道的视图：该渠道的会话行（按 `data-dsh-im-session-channel` 或行标题从属认出）保留，**其余所有行——别的渠道、官方会话、分组表头、显示更多控件——全部隐藏**；再点一次回到官方列表 |
+| 折叠分组 | 只有点击时才展开、翻页、滚动到该渠道的首个会话，且以 `CLICK_LIMIT = 200` 步为上限。这些控件在视图里是隐藏的，但仍可点击，所以行会先被画出来再被藏掉 |
+| dsh-im 会话默认隐藏 | 工作区、工作区树、单列表三种视图都不显示：dsh-im 会话行始终带 `data-eva-im-tag='off'`，只有点到某渠道后它自己那一类才变成 `'on'`。非 dsh-im 会话从不写标签，官方列表里绝不由本插件隐藏；进入渠道视图后它和其余行一样是 `'off'` |
+| 会话归属 | 一个会话只算一个分组，按 `home()` 判定：工作区记录 `sessionIds` 里有它的 id 就归那个工作区，否则归未分组（`workspace:` 空前缀）。这正是宿主 `groupByWorkspace` 的规则；`cwd` 不参与，宿主本身也不按 `cwd` 分组 |
+| 未分组那一桶 | 未分组没有表头可点，只有自己的「显示更多」控件（`data-row-key="overflow:"`，冒号后为空）。插件只点这个控件，不点表头 |
+| 单列表 | 宿主的单列表与分组列表都走 `AnimatedRows`，行就在同一个 `[role='tree']` 里，不需要另外的容器；`tree()` 仍会在宿主把行画在树外时改认 `[data-testid="session-list"]`。整张表就是 `overflow:` 这一页，插件把它记在 `__ungrouped_session__` 名下，只点它自己那一个控件，因此能翻到第一页之后的会话 |
 | 标签 | 走 Client locale 服务；跟随 profile 语言切换，注册表缺失时回退中文 |
-| 不受影响 | 官方分组、折叠状态、spy 计数、会话顺序；不重排、不隐藏官方按钮 |
+| 不受影响 | 官方分组、折叠状态、spy 计数、会话顺序，一个都不重写；渠道视图只是把它们连同其余行一起藏起来，退回后按宿主原样画出 |
 
 ## 样式契约
 
@@ -55,10 +60,12 @@ npm install dsh-im-workspace-buttons --prefix ~/.dsh/profiles/desktop --registry
 | `[data-eva-im-button]` | 28×28、无边框、无背景、`--dsw-radius-sm` 圆角、`--dsw-alias-label-secondary` 前景 |
 | `[data-eva-im-button]:hover` | 前景转 `--dsw-alias-label-primary` |
 | `[data-eva-im-state='on']` | 已选中的那枚转 `--dsw-alias-brand-primary` |
-| `[data-eva-im-tree] [data-row-key]:not([data-eva-im-row='on'])` | 非该渠道的会话行隐藏 |
+| `[data-eva-im-tag='off']` | 藏掉这一行——整份样式表里唯一的隐藏规则。没有点亮渠道时写在 dsh-im 会话行上；进入渠道视图后写在不属于该渠道的每一行上 |
 
 选择器前缀沿用 `data-eva-im-*`（提取时逐字保留，未改名），改前缀会破坏与 `eva-inspired-theme` 的样式兼容性。
-注意第四条规则：不能用「JS 不写属性」表达 off —— 必须显式写 `data-eva-im-row='on'`，否则一行都藏不住。
+这是一条普通的属性选择器，所以「off」必须显式写出来：没有标签的行就是宿主原样画的行。
+行标签用 `data-eva-im-tag` 而不复用 `data-eva-im-row`：后者在本效果的 MutationObserver 过滤名单里，行会被反复打标签。
+翻页泵先点控件、后藏行，所以样式表永远不会藏掉 runtime 还要点的那一枚控件。
 
 ## 依赖
 

@@ -212,7 +212,7 @@ function el(tagName, attributes = {}, children = []) {
  * A group is folded unless `expanded` is true; folded groups render no session rows, which is
  * the case the mount has to open before a channel's view can be seen.
  */
-export function createDom({ groups = [], expanded = [] } = {}) {
+export function createDom({ groups = [], expanded = [], flat = false } = {}) {
   const state = { dirtyCount: 0, dirty() {} }
   const observerBatches = []
 
@@ -239,6 +239,11 @@ export function createDom({ groups = [], expanded = [] } = {}) {
 
   const index = new Map()
   const rows = []
+  /* Round 66: the single list. ui-workspace draws it as rows with no nesting and no tree
+     role, inside a container it names data-testid="session-list" (:3896-4029) -- outside the
+     tree, which is exactly why the mount cannot reach those rows through [role=tree]. */
+  const list = flat ? el('div', { 'data-testid': 'session-list' }) : null
+  if (list !== null) slot.insertBefore(list, null)
 
   function cell(parent) {
     const div = el('div')
@@ -251,32 +256,42 @@ export function createDom({ groups = [], expanded = [] } = {}) {
     // children[0] is the channel-logo slot, children[1] is the title cell the mount reads.
     cell(row)
     const titleCell = cell(row)
-    titleCell.setAttribute('data-dsh-im-session-channel', channel)
-    titleCell.textContent = title
+    /* `channel` is the channel id dsh-im stamps on the Session -- which is NOT always the one
+       its title leads with: a Session bound to WeChat that was renamed keeps its stamp and
+       loses its lead. '' is a Session with neither, which the lead alone has to place. */
+    if (channel !== null) titleCell.setAttribute('data-dsh-im-session-channel', channel)
+    const text = typeof title === 'string' ? title : title.title
+    titleCell.textContent = text
     return row
   }
 
   for (const group of groups) {
-    const row = el('div', { 'data-row-key': `workspace:${group.title}` })
-    cell(row)
-    const title = cell(row)
-    title.textContent = group.title
-    tree.insertBefore(row, null)
-    rows.push(row)
-    index.set(`workspace:${group.title}`, row)
-    if (expanded.includes(group.title)) {
-      for (const [channel, text] of group.sessions) {
-        const session = addSession(`${group.title}:${text}`, channel, text)
-        tree.insertBefore(session, null)
-        rows.push(session)
-        index.set(`session:${group.title}:${text}`, session)
-      }
+    /* A null title is the 未分组 bucket -- and in a flat list the page itself: ungrouped
+       sessions keyed by their own id, no header, no group. */
+    const parent = group.title === null ? (list === null ? tree : list) : tree
+    if (group.title !== null) {
+      const row = el('div', { 'data-row-key': `workspace:${group.title}` })
+      cell(row)
+      const title = cell(row)
+      title.textContent = group.title
+      parent.insertBefore(row, null)
+      rows.push(row)
+      index.set(`workspace:${group.title}`, row)
+    }
+    const shown = group.title === null || expanded.includes(group.title)
+    if (!shown) continue
+    for (const [channel, text] of group.sessions) {
+      const name = group.title === null ? text : `${group.title}:${text}`
+      const session = addSession(name, channel, text)
+      parent.insertBefore(session, null)
+      rows.push(session)
+      index.set(`session:${name}`, session)
     }
   }
   // The overflow control a virtualised list puts in its last rendered row; the filter hides it
   // because it carries no tag, which is the sheet's rule and not the mount's business.
   const overflow = el('div', { 'data-row-key': 'overflow:0' })
-  tree.insertBefore(overflow, null)
+  ;(list === null ? tree : list).insertBefore(overflow, null)
   index.set('overflow:0', overflow)
 
   const listeners = new Map()
@@ -315,7 +330,7 @@ export function createDom({ groups = [], expanded = [] } = {}) {
   state.observer = null
 
   return {
-    body, head, slot, tree, header, label, marker, search,
+    body, head, slot, tree, list, header, label, marker, search,
     document, window, state,
     MutationObserverClass,
     get observer() { return state.observer },
@@ -323,6 +338,19 @@ export function createDom({ groups = [], expanded = [] } = {}) {
     row: key => index.get(key) ?? null,
     rows: () => rows,
     buttons: () => header.querySelectorAll('[data-eva-im-button]'),
+    // Every row the mount has kept lit, in document order. Round 66: the tag survives a lit
+    // view, and `on` is the only value that means "draw this one".
+    tagged: () => rows.filter(row => row.getAttribute('data-eva-im-tag') === 'on').map(row => row.getAttribute('data-row-key')),
+    // The selector the sheet builds for one row, as the browser would resolve it: the row
+    // together with every ancestor carrying the mount's tag.
+    tag: key => {
+      const parts = []
+      for (let node = index.get(key); node !== null && node !== undefined && node !== body; node = node.parentElement) {
+        const tag = node.getAttribute('data-eva-im-tag')
+        if (tag !== null) parts.unshift(`[data-eva-im-tag='${tag}']`)
+      }
+      return parts.join(' ')
+    },
     // The sheet is found from the furthest reachable root, which is where a document has it:
     // head before body, the way a page grows its own head.
     style: () => document.querySelector('style[data-dsh-im-workspace-buttons-sheet]'),

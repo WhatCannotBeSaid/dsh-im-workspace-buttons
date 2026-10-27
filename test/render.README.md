@@ -16,7 +16,7 @@ node test/render.mjs            # 起隔离 profile → 截图 → 交互断言 
 node test/render.mjs --keep     # 保留临时 profile，便于手点
 ```
 
-产物写在 `C:\Work\scratch\im-x\render\`（截图与 DOM dump），不落在包目录里。
+临时产物统一写在 `%TEMP%\dsh-im-workspace-buttons\render\`（截图与 DOM dump），不落在包目录里。当前检出不含 `test/render.mjs`，上方两条命令属于历史验证入口；恢复该脚本后须先让输出路径读取系统临时目录，再运行。
 
 ## 断言
 

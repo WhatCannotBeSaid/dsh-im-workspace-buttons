@@ -6,8 +6,10 @@ English | [中文](README.zh.md)
 
 One 28×28 icon button per [@xmanrui/dsh-im](https://www.npmjs.com/package/@xmanrui/dsh-im)
 channel that holds an account, placed in the official 「工作区」 (Workspaces) header row.
-Pressing one shows only that channel's conversations; pressing it again restores the
-official list.
+Pressing one puts the sidebar into that channel's view: only its conversations are drawn,
+and the official list (every other conversation, every group header) waits behind it.
+Pressing the same entry again drops back to the official list, where every dsh-im
+conversation is hidden again.
 
 This is the single feature extracted from `eva-inspired-theme`: the buttons and nothing
 else. No skin, no theme replacement, no dependency on the theme's CSS, locale namespace
@@ -48,10 +50,14 @@ one channel with a connected account; by design no buttons appear otherwise.
 | Plugin id | `dsh-im-workspace-buttons` (also the client module id and the locale namespace) |
 | Where | The header row carrying the official `sidebar.workspaces.directoryFlow` marker, left of the search slot, in the plugin's own channel order |
 | Visibility | An entry appears only when the channel **has an account**: `connection.status` returns a non-empty `botId` in `bots[]`, or the older `configured: true`. An inconclusive probe (RPC not ready, request failed) draws nothing on the first pass and keeps the previous verdict after that |
-| Click | Shows only that channel's conversation rows (recognised by `data-dsh-im-session-channel` or the row's text prefix); a second click restores the official list |
-| Collapsed groups | Unfolded, paged and scrolled to the channel's first conversation only on click, capped at `CLICK_LIMIT = 200` steps |
+| Click | Puts the sidebar into that channel's view: its conversation rows (recognised by `data-dsh-im-session-channel` or by the row's title belonging to the channel) stay, and **every other row — other channels, official conversations, group headers, show-more controls — is hidden**. A second click drops back to the official list |
+| Collapsed groups | Unfolded, paged and scrolled to the channel's first conversation only on click, capped at `CLICK_LIMIT = 200` steps. The controls are hidden in the view but still clickable, so the rows are drawn before they are hidden |
+| dsh-im hidden by default | No dsh-im conversation shows in any of the three views — 工作区, 工作区树, single list — until its entry is pressed. Every dsh-im row carries `data-eva-im-tag='off'`; only the lit channel's own rows turn `'on'`. A row that is not a dsh-im conversation is never tagged and is never hidden by the official list; in a lit view it is `'off'` like everything else |
+| Group ownership | A conversation counts as living in exactly one group, decided by `home()`: the workspace record whose `sessionIds` names it owns it, and everything else is Ungrouped (the empty `workspace:` suffix). That is the host's own rule (`groupByWorkspace`); `cwd` takes no part in it |
+| Ungrouped bucket | Ungrouped has no header to press — only its own show-more control, keyed `overflow:` with nothing after the colon. The plugin clicks that control and never a header for it |
+| Flat list | The host draws both lists through `AnimatedRows`, so the single list's rows sit inside the same `[role='tree']` and need no separate container. `tree()` still answers with a `[data-testid="session-list"]` container when a host draws the rows outside that tree. The whole page is one `overflow:` row; the plugin records it as `__ungrouped_session__` and opens that single control, so a channel view can reach conversations past the first page |
 | Labels | Through the Client locale service; follows the profile language, falls back to Chinese when the registry is absent |
-| Untouched | Official grouping, collapsed state, spy counts, conversation order; nothing is reordered or hidden |
+| Untouched | Official grouping, collapsed state, spy counts, conversation order — none of them are rewritten. A lit view hides the official rows along with everything else, and dropping back draws them exactly as the host had them |
 
 ## Style contract
 
@@ -63,12 +69,15 @@ comes from a `--dsw-*` token:
 | `[data-eva-im-button]` | 28×28, no border, no background, `--dsw-radius-sm` corners, `--dsw-alias-label-secondary` foreground |
 | `[data-eva-im-button]:hover` | Foreground turns `--dsw-alias-label-primary` |
 | `[data-eva-im-state='on']` | The lit entry turns `--dsw-alias-brand-primary` |
-| `[data-eva-im-tree] [data-row-key]:not([data-eva-im-row='on'])` | Every row not in this channel is hidden |
+| `[data-eva-im-tag='off']` | Hides that one row — the only hiding rule in the sheet. It is written on dsh-im rows while no entry is lit, and on every row that does not belong to the lit channel |
 
 The `data-eva-im-*` prefix is kept verbatim from the extraction; renaming it would break
-style compatibility with `eva-inspired-theme`. Note the fourth rule: an "off" state can
-never be expressed by omitting the attribute — `data-eva-im-row='on'` must be written
-explicitly, or no row is hidden at all.
+style compatibility with `eva-inspired-theme`. The rule is a plain attribute test, so an
+"off" state must be written explicitly: a row with no tag is a row the host draws as-is.
+The tag lives on its own attribute rather than on `data-eva-im-row`, which is in this
+effect's MutationObserver filter — a per-row tag there would re-trigger every pass. The
+pump hides rows *after* it has clicked them, which is why the sheet never hides a control
+the runtime still has to click.
 
 ## Dependencies
 
