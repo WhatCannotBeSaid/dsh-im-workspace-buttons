@@ -164,6 +164,59 @@ test('the row: a host re-render that leaves an entry at the front gets it re-sea
   dispose()
 })
 
+for (const title of ['工作区', '会话']) {
+  for (const shipped of [false, true]) {
+    test(`the row: ${shipped ? 'shipped' : 'source'} repairs the entire icon row left of ${title}`, async () => {
+      const services = createServices({ answers: HOLDING })
+      const dom = createDom({ groups: [] })
+      const header = dom.marker.parentElement
+      const label = header.children[0]
+      label.textContent = title
+      let dispose
+      if (shipped) {
+        loadShipped(dom).apply({
+          get: name => services.services[name],
+          effect(fn) { dispose = fn() },
+        })
+      } else dispose = mountAgainst(dom, services)
+
+      try {
+        await flush()
+        const buttons = dom.buttons()
+        // Include the missing case: ALL icons are left of the title, not just the first.
+        const arrangements = [
+          [...buttons, label],
+          [...buttons].reverse().concat(label),
+          [buttons[1], label, buttons[2], buttons[0]],
+          [buttons[2], buttons[0], label, buttons[1]],
+        ]
+        for (const searchPresent of [true, false]) {
+          if (!searchPresent) dom.marker.removeChild(dom.marker.children[0])
+          for (const arrangement of arrangements) {
+            for (const node of arrangement) header.insertBefore(node, dom.marker)
+            dom.observer.emit([{ type: 'childList', target: header }])
+            await flush()
+            assert.deepEqual(header.children.map(node => node === label ? title :
+              node === dom.marker ? 'search-slot' : node.getAttribute(BUTTON)),
+              [title, ...CHANNEL_ORDER, 'search-slot'],
+              `all icons must immediately follow ${title}; search present: ${searchPresent}`)
+            assert.ok(buttons.every(button => dom.buttons().includes(button)), 'existing nodes are reused')
+          }
+        }
+        // A settled pass must not move correctly placed nodes and re-trigger the observer.
+        const insert = header.insertBefore
+        let moves = 0
+        header.insertBefore = function (...args) { moves++; return insert.apply(this, args) }
+        dom.observer.emit([{ type: 'childList', target: header }])
+        await flush()
+        assert.equal(moves, 0, 'a settled row is not rewritten')
+      } finally {
+        dispose()
+      }
+    })
+  }
+}
+
 test('the row: a channel that unbound its account leaves, the others keep their order', async () => {
   const services = createServices({ answers: HOLDING })
   const dom = createDom({ groups: [] })

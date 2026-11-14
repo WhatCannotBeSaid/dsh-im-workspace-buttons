@@ -3,6 +3,23 @@
 All notable changes are recorded here. Versions follow SemVer; a new feature raises
 the minor version, a pure fix raises the patch version.
 
+## 1.0.6 — 2026-11-15
+
+### Fixed
+
+- **The entire channel icon row could still stay left of the 工作区 / 会话 title.**
+  The 1.0.5 correction preferred another existing icon over the title, preserving the
+  wrong position when the whole row had moved. Ordering now always starts at the title:
+  the first visible icon follows the title, and each subsequent icon follows its predecessor.
+  No search-slot or existing-icon fallback can retain the wrong anchor.
+- Correctly placed icons are not moved again, so the MutationObserver settles after repair.
+
+### Tests
+
+- Added regressions for both titles, source and shipped client, entire rows on the left,
+  reversed and mixed ordering, and absent search input. Existing nodes must be reused and
+  a settled row must perform no further DOM moves.
+
 ## 1.0.5 — 2026-11-14
 
 ### Fixed
