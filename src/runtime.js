@@ -598,6 +598,18 @@ function markerNode() {
   return document.querySelector(MARK_SELECTOR)
 }
 
+/* The row's own label: 工作区 or 会话. The seat the entries belong to is immediately
+   to its right, so this node is the anchor, not the search slot. Found by shape rather
+   than by class: the label is the one leaf element in this row carrying text -- every
+   other child is an icon control or a slot -- which survives a rebuilt stylesheet. */
+function titleNode(host) {
+  for (var i = 0; i < host.children.length; i++) {
+    var child = host.children[i]
+    if (child.childElementCount === 0 && (child.textContent || '').trim() !== '') return child
+  }
+  return null
+}
+
 /* The entries, in the row's own document order -- the table's order, which is the
    plugin's -- every one of them before the search slot. Each is created only when
    missing, so a re-render that drops one puts it back in its place. */
@@ -621,23 +633,37 @@ function entry() {
       if (button !== null && button.parentElement !== null) button.parentElement.removeChild(button)
       continue
     }
-    if (button === null) {
-      button = create(channel)
-      /* The node this entry has to sit before to keep the row's order: the entry
-         to its right if that one is already there, otherwise the search slot --
-         and the slot's own margin-left: auto keeps every official control where it
-         was, right of the 工作区 label. */
-      var before = null
-      if (previous !== null && previous.parentElement === host) before = previous.nextSibling
-      else {
-        for (var k = j + 1; k < CHANNELS.length && before === null; k++) {
-          var later = host.querySelector('[' + BUTTON_ATTR + "='" + CHANNELS[k].id + "']")
-          if (later !== null) before = later
-        }
-        if (before === null) before = slot
+    if (button === null) button = create(channel)
+    /* The node this entry has to sit before to keep the row's order: the entry
+       to its right if that one is already there, otherwise the search slot --
+       and the slot's own margin-left: auto keeps every official control where it
+       was, right of the 工作区 label. */
+    var before = null
+    if (previous !== null && previous.parentElement === host) before = previous.nextSibling
+    else {
+      for (var k = j + 1; k < CHANNELS.length && before === null; k++) {
+        var later = host.querySelector('[' + BUTTON_ATTR + "='" + CHANNELS[k].id + "']")
+        if (later !== null) before = later
       }
-      if (before === null) host.appendChild(button)
-      else host.insertBefore(button, before)
+      if (before === null) {
+        /* The label is the seat: an entry reads as "right of 工作区/会话". The search slot
+           is the fallback and the row's end the last resort. */
+        var label = titleNode(host)
+        before = label === null ? slot : label.nextSibling
+      }
+    }
+    /* Every pass re-seats an existing entry, not only the pass that created it: the
+       host re-renders this row and leaves an entry it did not create at the front of
+       its children, where a create-time placement never puts it back. The comparison
+       is not an optimisation -- an unconditional insertBefore writes a childList
+       record, which is exactly the batch this effect's own observer answers, so the
+       pass would schedule itself on every correction. */
+    if (before === null) {
+      /* No anchor this pass. A fresh entry still has to land somewhere; an existing one
+         keeps the seat it already holds rather than being pushed to the row's end. */
+      if (button.parentElement !== host) host.appendChild(button)
+    } else if (before !== button && button.nextSibling !== before) {
+      host.insertBefore(button, before)
     }
     decorate(button, channel)
     previous = button

@@ -143,6 +143,27 @@ test('the row: a re-render that drops an entry gets it back in place', async () 
   dispose()
 })
 
+test('the row: a host re-render that leaves an entry at the front gets it re-seated', async () => {
+  const services = createServices({ answers: HOLDING })
+  const dom = createDom({ groups: [] })
+  const dispose = mountAgainst(dom, services)
+  await flush()
+
+  const header = dom.marker.parentElement
+  const first = dom.buttons()[0]
+  // What React does to a child it did not create: as it re-adds its own children, an entry
+  // it never built ends up ahead of the 工作区 label rather than after it.
+  header.insertBefore(first, header.children[0])
+  assert.equal(header.firstElementChild, first, 'the entry was pushed to the front')
+
+  dom.observer.emit([{ type: 'childList', target: header, addedNodes: [], removedNodes: [] }])
+  await flush()
+  assert.equal(header.children[0].textContent, '工作区', 'the label is leftmost again')
+  assert.deepEqual(dom.buttons().map(b => b.getAttribute(BUTTON)), CHANNEL_ORDER)
+  assert.equal(dom.marker.previousElementSibling?.getAttribute(BUTTON) ?? null, 'office', 'the marker still follows the last entry')
+  dispose()
+})
+
 test('the row: a channel that unbound its account leaves, the others keep their order', async () => {
   const services = createServices({ answers: HOLDING })
   const dom = createDom({ groups: [] })

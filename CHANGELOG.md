@@ -3,6 +3,29 @@
 All notable changes are recorded here. Versions follow SemVer; a new feature raises
 the minor version, a pure fix raises the patch version.
 
+## 1.0.5 — 2026-11-14
+
+### Fixed
+
+- **An entry could end up left of the 工作区 / 会话 label instead of right of it.** The seat
+  was decided once, when the entry was created, and never revisited, so a host re-render
+  that left the entry ahead of the label kept it there. Every pass now re-seats an existing
+  entry too; it compares first, because an unconditional `insertBefore` writes the
+  childList record this effect's own observer answers and would schedule itself.
+- **An entry dropped to the end of the row when the search slot was not inside it.** The
+  slot is an anchor only when it is there; on a rail that keeps it out, the fallback
+  appended the entry to the row's end — where the row's own actions live — which reads as
+  "left of the label". The label is now the primary anchor, the search slot the fallback
+  and the row's end the last resort; a pass with no anchor no longer moves an entry that
+  already holds a seat.
+
+### Changed
+
+- `test/fake-dom.mjs`: `insertBefore` removes an already-parented child before resolving
+  `before`, as a real DOM does, and `childElementCount` was added.
+- `README.md` / `README.zh.md`: the row description now places the entries to the right of
+  the label.
+
 ## 1.0.2 — 2026-10-27
 
 ### Fixed

@@ -40,7 +40,7 @@ npm install dsh-im-workspace-buttons --prefix ~/.dsh/profiles/desktop --registry
 | | |
 |---|---|
 | 插件 id | `dsh-im-workspace-buttons`（client 模块 id、locale 命名空间同名） |
-| 出现在哪 | 官方 `sidebar.workspaces.directoryFlow` 标记所在的表头行，搜索槽左侧，按渠道表顺序 |
+| 出现在哪 | 官方 `sidebar.workspaces.directoryFlow` 标记所在的表头行，`工作区`/`会话` 标签右侧、搜索槽左侧，按渠道表顺序 |
 | 显示条件 | 对应渠道**已接入**才显示：`connection.status` 返回 `bots[]` 里有非空 `botId`，或旧版返回的 `configured: true`；探测不出结论（RPC 未就绪、请求失败）时首轮不画、之后保留上次结论 |
 | 点击 | 进入该渠道的视图：该渠道的会话行（按 `data-dsh-im-session-channel` 或行标题从属认出）保留，**其余所有行——别的渠道、官方会话、分组表头、显示更多控件——全部隐藏**；再点一次回到官方列表 |
 | 折叠分组 | 只有点击时才展开、翻页、滚动到该渠道的首个会话，且以 `CLICK_LIMIT = 200` 步为上限。这些控件在视图里是隐藏的，但仍可点击，所以行会先被画出来再被藏掉 |

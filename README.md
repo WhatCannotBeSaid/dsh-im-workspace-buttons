@@ -48,7 +48,7 @@ one channel with a connected account; by design no buttons appear otherwise.
 | | |
 |---|---|
 | Plugin id | `dsh-im-workspace-buttons` (also the client module id and the locale namespace) |
-| Where | The header row carrying the official `sidebar.workspaces.directoryFlow` marker, left of the search slot, in the plugin's own channel order |
+| Where | The header row carrying the official `sidebar.workspaces.directoryFlow` marker, to the right of the 工作区/会话 label and left of the search slot, in the plugin's own channel order |
 | Visibility | An entry appears only when the channel **has an account**: `connection.status` returns a non-empty `botId` in `bots[]`, or the older `configured: true`. An inconclusive probe (RPC not ready, request failed) draws nothing on the first pass and keeps the previous verdict after that |
 | Click | Puts the sidebar into that channel's view: its conversation rows (recognised by `data-dsh-im-session-channel` or by the row's title belonging to the channel) stay, and **every other row — other channels, official conversations, group headers, show-more controls — is hidden**. A second click drops back to the official list |
 | Collapsed groups | Unfolded, paged and scrolled to the channel's first conversation only on click, capped at `CLICK_LIMIT = 200` steps. The controls are hidden in the view but still clickable, so the rows are drawn before they are hidden |

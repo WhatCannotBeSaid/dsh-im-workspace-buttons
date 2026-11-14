@@ -37,6 +37,10 @@ export class FakeElement {
     return this.children.length > 0 ? this.children[0] : null
   }
 
+  get childElementCount() {
+    return this.children.length
+  }
+
   /** The sibling before this one, or null — what a row insertion has to fall back on. */
   get previousElementSibling() {
     const parent = this.parentElement
@@ -75,8 +79,11 @@ export class FakeElement {
   }
 
   insertBefore(child, before) {
-    const at = before === null ? -1 : this.children.indexOf(before)
+    // Remove first, then locate: a real DOM moves an already-parented child by taking it out
+    // before it resolves where `before` sits. Reading the index first shifts the seat by one
+    // exactly when the node being moved was to the left of `before`.
     if (child.parentElement !== null) child.parentElement.removeChild(child)
+    const at = before === null ? -1 : this.children.indexOf(before)
     if (at < 0) this.children.push(child)
     else this.children.splice(at, 0, child)
     child.parentElement = this

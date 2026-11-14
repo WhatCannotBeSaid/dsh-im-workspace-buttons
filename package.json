@@ -1,6 +1,6 @@
 {
   "name": "dsh-im-workspace-buttons",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "工作区旁按钮 — one 28x28 channel entry per @xmanrui/dsh-im channel that holds an account, in the official 工作区 header row; pressing one shows only that channel's conversations and hides every other row, pressing it again restores the official list. Extracted from eva-inspired-theme so the control installs without the skin.",
   "type": "module",
   "license": "MIT",
